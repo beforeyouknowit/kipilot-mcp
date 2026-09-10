@@ -1,0 +1,42 @@
+name: macos-zip-release
+
+on:
+  workflow_dispatch:
+  release:
+    types:
+      - published
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos-zip:
+    # macos-latest is an Apple Silicon runner, so setup-python provides a
+    # native arm64 interpreter and the artifact is macos-arm64.
+    runs-on: macos-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Build macOS ZIP artifact
+        run: ./build-macos-zip.sh --force-install --clean
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kipilot-mcp-macos-zip
+          path: artifacts/*.zip
+          if-no-files-found: error
+
+      - name: Attach ZIP to GitHub release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*.zip
