@@ -165,8 +165,6 @@ Run without `--skip-run` to start the server process directly from a terminal:
 ./start-kipilot-mcp.sh
 ```
 
-On Apple Silicon, the venv must be created from a native arm64 Python interpreter (for example `/opt/homebrew/bin/python3.13`). The script prefers native-architecture interpreters automatically; a Rosetta x86_64 Python (for example from an Intel Homebrew install under `/usr/local`) breaks native dependency builds with `incompatible architecture` import errors. If needed, install a native Python with `brew install python@3.13` (Apple Silicon Homebrew) and pass it explicitly with `--python`.
-
 ### LM Studio Bionic (macOS)
 
 LM Studio Bionic loads MCP servers from its local `mcp.json`. On macOS that file lives at `~/.lmstudio/apps/bionic/mcp.json` (Bionic can also reveal the file from its MCP settings). Any local or remote model loaded into Bionic can then call KiPilot's tools against the running KiCad GUI.
