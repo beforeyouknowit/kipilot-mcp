@@ -89,6 +89,7 @@ Choose the installation path that fits your workflow:
 
 - Windows ZIP release if you want a ready-to-run Windows MCP server without managing Python locally
 - Source install if you want to inspect, modify, or develop the server from this repository
+- macOS source install with `start-kipilot-mcp.sh` if you want to run the server from source on macOS (this is also the path used by the LM Studio Bionic configuration below)
 
 ### Windows ZIP release
 
@@ -144,6 +145,63 @@ Run without `-SkipRun` to start the server process directly from a terminal:
 
 For VS Code, Claude Desktop, and other MCP hosts, prefer configuring the host to launch `python -m kipilot_mcp.server` directly from the prepared environment. That keeps the stdio server command explicit and easy to audit.
 
+### macOS helper
+
+On macOS, the repository includes the counterpart `start-kipilot-mcp.sh`. It creates `.venv` when needed, installs the runtime package, applies conservative default environment variables, and can start the server for manual checks:
+
+```bash
+./start-kipilot-mcp.sh --skip-run
+```
+
+Verify that the server can reach a running KiCad instance:
+
+```bash
+./start-kipilot-mcp.sh --check
+```
+
+Run without `--skip-run` to start the server process directly from a terminal:
+
+```bash
+./start-kipilot-mcp.sh
+```
+
+On Apple Silicon, the venv must be created from a native arm64 Python interpreter (for example `/opt/homebrew/bin/python3.13`). The script prefers native-architecture interpreters automatically; a Rosetta x86_64 Python (for example from an Intel Homebrew install under `/usr/local`) breaks native dependency builds with `incompatible architecture` import errors. If needed, install a native Python with `brew install python@3.13` (Apple Silicon Homebrew) and pass it explicitly with `--python`.
+
+### LM Studio Bionic (macOS)
+
+LM Studio Bionic loads MCP servers from its local `mcp.json`. On macOS that file lives at `~/.lmstudio/apps/bionic/mcp.json` (Bionic can also reveal the file from its MCP settings). Any local or remote model loaded into Bionic can then call KiPilot's tools against the running KiCad GUI.
+
+Print a ready-to-paste entry for this checkout:
+
+```bash
+./start-kipilot-mcp.sh --bionic
+```
+
+Or start from `bionic/mcp.example.json` and replace the placeholder paths with your checkout location:
+
+```json
+{
+  "mcpServers": {
+    "kipilot-mcp": {
+      "command": "/ABSOLUTE/PATH/TO/kipilot-mcp/.venv/bin/python",
+      "args": ["-m", "kipilot_mcp.server"],
+      "cwd": "/ABSOLUTE/PATH/TO/kipilot-mcp",
+      "env": {
+        "KIPILOT_KICAD_CLIENT_NAME": "kipilot-mcp",
+        "KIPILOT_KICAD_TIMEOUT_MS": "60000",
+        "KIPILOT_ENABLE_MUTATIONS": "0",
+        "KIPILOT_COMMIT_MESSAGE_PREFIX": "KiPilot MCP",
+        "KIPILOT_LOG_LEVEL": "INFO",
+        "KIPILOT_LOG_FILE": "/ABSOLUTE/PATH/TO/kipilot-mcp/.logs/kipilot-mcp.log"
+      },
+      "timeout": 60000
+    }
+  }
+}
+```
+
+Bionic starts the server process itself, so keep `command` pointed at the venv Python rather than a wrapper script.
+
 ### Manual install
 
 A virtual environment is recommended for dependency isolation, but it is not a KiPilot-specific requirement. If you already manage Python environments another way, point your MCP host at that interpreter instead.
@@ -173,6 +231,8 @@ $env:KICAD_API_TOKEN = "..."
 ```
 
 When the server is launched from VS Code rather than from KiCad, those variables may not be present. In that case `kicad-python` falls back to the default platform-dependent IPC endpoint, which is easiest to work with when only one KiCad instance is open.
+
+On macOS the default endpoint is the Unix socket `ipc:///tmp/kicad/api.sock`, which KiCad creates in its temp directory when it launches. With several KiCad instances running, KiCad appends the PID to the socket name, so set `KICAD_API_SOCKET` explicitly to reach a specific instance.
 
 KiPilot-specific settings:
 
@@ -258,6 +318,14 @@ Build the Windows ZIP release locally:
 
 That script creates a versioned archive at `artifacts/kipilot-mcp-<version>-windows-x64.zip`, includes `README.md` and `LICENSE` inside the archive, and is the same build path used by the GitHub Actions release workflow.
 
+Build the macOS ZIP release locally:
+
+```bash
+./build-macos-zip.sh --force-install --clean
+```
+
+That script creates a versioned archive at `artifacts/kipilot-mcp-<version>-macos-<arch>.zip` (where `arch` is `arm64` or `x64`), includes `README.md` and `LICENSE` inside the archive, and is the same build path used by the GitHub Actions macOS release workflow.
+
 Release process checklist: see `RELEASE-CHECKLIST.md`.
 
 ## Repository Layout
@@ -269,6 +337,8 @@ Release process checklist: see `RELEASE-CHECKLIST.md`.
 |   |-- .logs/
 |   |-- .vscode/
 |   `-- README.md
+|-- bionic/
+|   `-- mcp.example.json
 |-- src/
 |   `-- kipilot_mcp/
 |       |-- __init__.py
@@ -284,11 +354,13 @@ Release process checklist: see `RELEASE-CHECKLIST.md`.
 |-- tests/
 |   `-- test_ipc_client.py
 |-- KiPilot.svg
+|-- build-macos-zip.sh
 |-- build-windows-zip.ps1
 |-- pyproject.toml
 |-- pyinstaller_entry.py
 |-- README.md
-`-- start-kipilot-mcp.ps1
+|-- start-kipilot-mcp.ps1
+`-- start-kipilot-mcp.sh
 ```
 
 ## The `agent-test/` Folder
