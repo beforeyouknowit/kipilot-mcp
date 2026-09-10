@@ -25,7 +25,8 @@ classifiers = [
 ]
 dependencies = [
   "kicad-python>=0.7.1",
-  "mcp>=1.8.0"
+  # mcp 2.x renamed FastMCP -> MCPServer; this server still uses the v1 API.
+  "mcp>=1.8.0,<2.0.0"
 ]
 
 [project.urls]
