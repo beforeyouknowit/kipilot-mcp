@@ -9,10 +9,15 @@ on:
 permissions:
   contents: write
 
+# The artifact name (and therefore the architecture suffix) is derived by
+# build-macos-zip.sh from the venv interpreter that PyInstaller bundles, so
+# each job below just needs the right runner: arm64 -> macos-arm64 ZIP,
+# x86_64 -> macos-x64 ZIP.
+
 jobs:
-  build-macos-zip:
+  build-macos-zip-arm64:
     # macos-latest is an Apple Silicon runner, so setup-python provides a
-    # native arm64 interpreter and the artifact is macos-arm64.
+    # native arm64 interpreter.
     runs-on: macos-latest
     timeout-minutes: 30
 
@@ -31,7 +36,37 @@ jobs:
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: kipilot-mcp-macos-zip
+          name: kipilot-mcp-macos-arm64-zip
+          path: artifacts/*.zip
+          if-no-files-found: error
+
+      - name: Attach ZIP to GitHub release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*.zip
+
+  build-macos-zip-x64:
+    # macos-13 is GitHub's last Intel (x86_64) runner image.
+    runs-on: macos-13
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Build macOS ZIP artifact
+        run: ./build-macos-zip.sh --force-install --clean
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kipilot-mcp-macos-x64-zip
           path: artifacts/*.zip
           if-no-files-found: error
 
