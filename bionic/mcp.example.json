@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "kipilot-mcp": {
+      "command": "/ABSOLUTE/PATH/TO/kipilot-mcp/.venv/bin/python",
+      "args": ["-m", "kipilot_mcp.server"],
+      "cwd": "/ABSOLUTE/PATH/TO/kipilot-mcp",
+      "env": {
+        "KIPILOT_KICAD_CLIENT_NAME": "kipilot-mcp",
+        "KIPILOT_KICAD_TIMEOUT_MS": "60000",
+        "KIPILOT_ENABLE_MUTATIONS": "0",
+        "KIPILOT_COMMIT_MESSAGE_PREFIX": "KiPilot MCP",
+        "KIPILOT_LOG_LEVEL": "INFO",
+        "KIPILOT_LOG_FILE": "/ABSOLUTE/PATH/TO/kipilot-mcp/.logs/kipilot-mcp.log"
+      },
+      "timeout": 60000
+    }
+  }
+}
