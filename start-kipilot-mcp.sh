@@ -12,6 +12,8 @@
 #   ./start-kipilot-mcp.sh --force-install  Reinstall the runtime into .venv
 #   ./start-kipilot-mcp.sh --check          Bootstrap and verify KiCad IPC
 #   ./start-kipilot-mcp.sh --bionic         Print a ready-to-paste Bionic mcp.json entry
+#   ./start-kipilot-mcp.sh --mcp-json       Print a generic mcpServers entry (Bionic, Claude Desktop, ...)
+#   ./start-kipilot-mcp.sh --vscode-json    Print a VS Code mcp.json (servers) entry
 #   ./start-kipilot-mcp.sh --python PATH    Use a specific Python interpreter
 #
 # Notes:
@@ -28,7 +30,7 @@ venv_python="$venv_path/bin/python"
 force_install=0
 skip_run=0
 do_check=0
-print_bionic=0
+mcp_host=""
 python_override=""
 
 while [[ $# -gt 0 ]]; do
@@ -36,10 +38,12 @@ while [[ $# -gt 0 ]]; do
         --force-install) force_install=1; shift ;;
         --skip-run) skip_run=1; shift ;;
         --check) do_check=1; shift ;;
-        --bionic) print_bionic=1; shift ;;
+        --bionic) mcp_host="bionic"; shift ;;
+        --mcp-json) mcp_host="generic"; shift ;;
+        --vscode-json) mcp_host="vscode"; shift ;;
         --python) python_override="${2:?--python requires a path}"; shift 2 ;;
         -h|--help)
-            sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
+            sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'
             exit 0
             ;;
         *)
@@ -185,8 +189,15 @@ report_kicad_socket() {
         write_status "KiCad (Flatpak) IPC socket found: $flatpak_socket"
         return 0
     fi
-    if ls "$socket_root"/api.sock* >/dev/null 2>&1; then
-        write_status "KiCad IPC socket found: $(ls "$socket_root"/api.sock* | tr '\n' ' ')"
+    local sockets count
+    sockets="$(ls "$socket_root"/api.sock* 2>/dev/null | tr '\n' ' ')"
+    if [[ -n "$sockets" ]]; then
+        write_status "KiCad IPC socket found: ${sockets% }"
+        count="$(ls "$socket_root"/api.sock* 2>/dev/null | wc -l | tr -d ' ')"
+        if [[ "$count" -gt 1 ]]; then
+            write_status "Note: $count KiCad instances are running (socket names are PID-suffixed)."
+            write_status "Set KICAD_API_SOCKET to reach a specific instance."
+        fi
     else
         write_status "Warning: no KiCad IPC socket found under $socket_root."
         write_status "Start KiCad, open the target project in the PCB Editor, and retry."
@@ -220,10 +231,37 @@ PYEOF
     fi
 }
 
-print_bionic_config() {
-    # Emits the mcpServers entry for Bionic's mcp.json. The Bionic host launches
-    # this venv python directly, so no wrapper script is needed.
-    cat <<EOF
+print_mcp_config() {
+    # Emits a ready-to-paste entry for an MCP host. Hosts launch this venv
+    # python directly, so no wrapper script is needed.
+    local host="$1"
+    case "$host" in
+        vscode)
+            # VS Code uses "servers" (not "mcpServers") and an explicit type.
+            cat <<EOF
+{
+  "servers": {
+    "kipilot-mcp": {
+      "type": "stdio",
+      "command": "$venv_python",
+      "args": ["-m", "kipilot_mcp.server"],
+      "env": {
+        "KIPILOT_KICAD_CLIENT_NAME": "${KIPILOT_KICAD_CLIENT_NAME:-kipilot-mcp}",
+        "KIPILOT_KICAD_TIMEOUT_MS": "${KIPILOT_KICAD_TIMEOUT_MS:-60000}",
+        "KIPILOT_ENABLE_MUTATIONS": "${KIPILOT_ENABLE_MUTATIONS:-0}",
+        "KIPILOT_COMMIT_MESSAGE_PREFIX": "${KIPILOT_COMMIT_MESSAGE_PREFIX:-KiPilot MCP}",
+        "KIPILOT_LOG_LEVEL": "${KIPILOT_LOG_LEVEL:-INFO}",
+        "KIPILOT_LOG_FILE": "${KIPILOT_LOG_FILE:-$repo_root/.logs/kipilot-mcp.log}"
+      }
+    }
+  }
+}
+EOF
+            ;;
+        *)
+            # "mcpServers" style: Bionic, Claude Desktop, and most other hosts.
+            # Bionic additionally honors "cwd" and "timeout".
+            cat <<EOF
 {
   "mcpServers": {
     "kipilot-mcp": {
@@ -243,6 +281,8 @@ print_bionic_config() {
   }
 }
 EOF
+            ;;
+    esac
 }
 
 pushd "$repo_root" >/dev/null
@@ -257,9 +297,9 @@ fi
 
 set_default_env
 
-if [[ "$print_bionic" -eq 1 ]]; then
-    write_status "Bionic mcp.json entry for this checkout (stderr note; JSON on stdout):"
-    print_bionic_config
+if [[ -n "$mcp_host" ]]; then
+    write_status "MCP host entry for this checkout (host='$mcp_host'; JSON on stdout):"
+    print_mcp_config "$mcp_host"
     popd >/dev/null
     exit 0
 fi

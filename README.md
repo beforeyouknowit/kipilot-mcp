@@ -133,6 +133,8 @@ The server is a stdio process. Your MCP host should start it with the venv's Pyt
 
 Add the `KIPILOT_*` environment variables from the [Configuration](#configuration) section to the host entry.
 
+Prefer not to type the entry by hand? The Unix helper prints a ready-to-paste JSON entry for this checkout: `./start-kipilot-mcp.sh --mcp-json` (Bionic, Claude Desktop, and most `mcpServers`-style hosts) or `./start-kipilot-mcp.sh --vscode-json` (VS Code). `--bionic` is a shortcut for `--mcp-json`.
+
 #### LM Studio Bionic (macOS)
 
 LM Studio Bionic loads MCP servers from its local `mcp.json`. On macOS that file lives at `~/.lmstudio/apps/bionic/mcp.json` (Bionic can also reveal the file from its MCP settings). Any local or remote model loaded into Bionic can then call KiPilot's tools against the running KiCad GUI.
@@ -232,6 +234,14 @@ If you do not want to manage Python at all on Windows, the upstream project publ
 
 Do not double-click the executable for normal use. Let your MCP host start it so stdio stays attached to the host.
 
+### Linux
+
+The venv install above is the supported path on Linux — this fork does not publish prebuilt Linux binaries, and nothing needs to be compiled: `./start-kipilot-mcp.sh --skip-run` is the whole setup (it works unchanged on macOS and Linux).
+
+- **KiCad 10 on Ubuntu/Debian:** use KiCad's official per-release PPA (listed in the Linux section of the [kicad.org downloads page](https://www.kicad.org/downloads/)), the KiCad Flatpak from Flathub, or your distribution's package if it ships KiCad 10. Other distros: any KiCad 10.x that exposes the IPC API works the same way.
+- **IPC socket:** KiCad creates it in the user's temp directory at launch — `/tmp/kicad/api.sock` for native installs and `~/.var/app/org.kicad.KiCad/cache/tmp/kicad/api.sock` for Flatpak. `kicad-python` resolves both defaults automatically. With several KiCad instances running, the socket name gets a PID suffix (`api.sock.12345`); the launcher warns about this, and `KICAD_API_SOCKET` targets a specific instance (see [Configuration](#configuration)).
+- **MCP host config:** the JSON helpers above (`--mcp-json`, `--vscode-json`) work on Linux exactly as on macOS.
+
 ## Configuration
 
 The IPC connection uses KiCad's official API endpoint. On macOS and Linux it is a Unix domain socket; on Windows it lives under the user temp directory. When KiCad launches an API plugin it provides these environment variables:
@@ -309,13 +319,13 @@ Windows (PowerShell):
 
 Creates `artifacts/kipilot-mcp-<version>-windows-x64.zip`.
 
-macOS / Linux (Bash):
+macOS (Bash; the script refuses to run on other operating systems):
 
 ```bash
 ./build-macos-zip.sh --force-install --clean
 ```
 
-Creates `artifacts/kipilot-mcp-<version>-macos-<arch>.zip` (where `arch` is `arm64` or `x64`, taken from the build machine). Both archives include `README.md` and `LICENSE`. To share a build, upload the ZIP to a GitHub release manually — see `RELEASE-CHECKLIST.md`.
+Creates `artifacts/kipilot-mcp-<version>-macos-<arch>.zip` (where `arch` is `arm64` or `x64`, taken from the build machine). Both archives include `README.md` and `LICENSE`. Linux has no packaging script on purpose — the venv install is the supported path there. To share a build, upload the ZIP to a GitHub release manually — see `RELEASE-CHECKLIST.md`.
 
 ## Repository Layout
 
