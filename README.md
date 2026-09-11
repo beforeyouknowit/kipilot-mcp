@@ -79,93 +79,61 @@ Important export semantics:
 - Python 3.11+ for source installs and local ZIP builds
 - Git for source installs
 
+No compiler or Rust toolchain is required on mainstream platforms: all dependencies ship binary wheels for Windows x64, macOS (arm64 and x86_64), and Linux (x86_64 and aarch64).
+
 Use a stable CPython release such as 3.11, 3.12, or 3.13. Avoid preview or alpha Python interpreters because the native dependency chain may not publish wheels for them yet.
 
 The Windows ZIP release bundles its own Python runtime for the server process, so local Python is not required when you install from the downloadable Windows artifact.
 
 ## Quick Start
 
-Choose the installation path that fits your workflow:
+The supported installation path is a **source install**, and it works the same on macOS, Linux, and Windows. It takes three steps: clone, install into a virtual environment with the included helper script, and point your MCP host at the venv's Python.
 
-- Windows ZIP release if you want a ready-to-run Windows MCP server without managing Python locally
-- Source install if you want to inspect, modify, or develop the server from this repository
-- macOS source install with `start-kipilot-mcp.sh` if you want to run the server from source on macOS (this is also the path used by the LM Studio Bionic configuration below)
+### Step 1 — Clone the repository
 
-### Windows ZIP release
-
-Download the latest Windows release ZIP from GitHub Releases, extract it, and point your MCP host at `kipilot-mcp.exe`.
-
-- Latest release: https://github.com/belaszalontai/kipilot-mcp/releases/latest
-- Artifact name pattern: `kipilot-mcp-<version>-windows-x64.zip`
-- The ZIP contains the stdio server executable plus its bundled runtime
-
-Example VS Code MCP configuration using the extracted Windows ZIP:
-
-```json
-{
-	"servers": {
-		"kipilot-mcp": {
-			"type": "stdio",
-			"command": "C:\\Tools\\kipilot-mcp-<version>-windows-x64\\kipilot-mcp.exe",
-			"env": {
-				"KIPILOT_KICAD_CLIENT_NAME": "kipilot-mcp",
-				"KIPILOT_KICAD_TIMEOUT_MS": "60000",
-				"KIPILOT_LOG_LEVEL": "INFO",
-				"KIPILOT_LOG_FILE": ".logs/kipilot-mcp.log"
-			}
-		}
-	}
-}
-```
-
-Do not double-click the executable for normal use. Let your MCP host start it so stdio stays attached to the host.
-
-### Source install
-
-Clone the public repository:
-
-```powershell
-git clone https://github.com/belaszalontai/kipilot-mcp.git
+```bash
+git clone https://github.com/beforeyouknowit/kipilot-mcp.git
 cd kipilot-mcp
 ```
 
-### Windows helper
+### Step 2 — Create the environment and install
 
-On Windows, the repository includes a convenience script that creates `.venv` when needed, installs the runtime package, applies conservative default environment variables, and can start the server for manual checks:
+One helper script per platform family creates `.venv` when needed, installs the runtime package, and applies conservative default environment variables:
 
-```powershell
-.\start-kipilot-mcp.ps1 -SkipRun
-```
-
-Run without `-SkipRun` to start the server process directly from a terminal:
-
-```powershell
-.\start-kipilot-mcp.ps1
-```
-
-For VS Code, Claude Desktop, and other MCP hosts, prefer configuring the host to launch `python -m kipilot_mcp.server` directly from the prepared environment. That keeps the stdio server command explicit and easy to audit.
-
-### macOS helper
-
-On macOS, the repository includes the counterpart `start-kipilot-mcp.sh`. It creates `.venv` when needed, installs the runtime package, applies conservative default environment variables, and can start the server for manual checks:
+macOS and Linux (Bash):
 
 ```bash
 ./start-kipilot-mcp.sh --skip-run
 ```
 
-Verify that the server can reach a running KiCad instance:
+On macOS the script prefers a Python 3.11+ interpreter that matches your machine's architecture (native arm64 on Apple Silicon, native x86_64 on Intel). On Linux it simply picks the newest Python 3.11+ on your `PATH`.
+
+Windows (PowerShell):
+
+```powershell
+.\start-kipilot-mcp.ps1 -SkipRun
+```
+
+Verify that the environment can reach a running KiCad instance (macOS/Linux):
 
 ```bash
 ./start-kipilot-mcp.sh --check
 ```
 
-Run without `--skip-run` to start the server process directly from a terminal:
+Run the helper without `--skip-run` (or without `-SkipRun` on Windows) to start the server process directly from a terminal for manual checks. For MCP hosts, prefer configuring the host to launch `python -m kipilot_mcp.server` directly from the prepared environment (next step). That keeps the stdio server command explicit and easy to audit.
 
-```bash
-./start-kipilot-mcp.sh
-```
+### Step 3 — Point your MCP host at the server
 
-### LM Studio Bionic (macOS)
+The server is a stdio process. Your MCP host should start it with the venv's Python so the host owns process startup:
+
+| Platform | Command | Args |
+| --- | --- | --- |
+| macOS / Linux | `<checkout>/.venv/bin/python` | `-m kipilot_mcp.server` |
+| Windows | `<checkout>\.venv\Scripts\python.exe` | `-m kipilot_mcp.server` |
+
+Add the `KIPILOT_*` environment variables from the [Configuration](#configuration) section to the host entry.
+
+#### LM Studio Bionic (macOS)
 
 LM Studio Bionic loads MCP servers from its local `mcp.json`. On macOS that file lives at `~/.lmstudio/apps/bionic/mcp.json` (Bionic can also reveal the file from its MCP settings). Any local or remote model loaded into Bionic can then call KiPilot's tools against the running KiCad GUI.
 
@@ -200,9 +168,44 @@ Or start from `bionic/mcp.example.json` and replace the placeholder paths with y
 
 Bionic starts the server process itself, so keep `command` pointed at the venv Python rather than a wrapper script.
 
-### Manual install
+#### VS Code and other hosts (source install)
+
+Example VS Code MCP configuration using the venv created above:
+
+```json
+{
+	"servers": {
+		"kipilot-mcp": {
+			"type": "stdio",
+			"command": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+			"args": ["-m", "kipilot_mcp.server"],
+			"env": {
+				"KIPILOT_KICAD_CLIENT_NAME": "kipilot-mcp",
+				"KIPILOT_KICAD_TIMEOUT_MS": "60000",
+				"KIPILOT_LOG_LEVEL": "INFO",
+				"KIPILOT_LOG_FILE": ".logs/kipilot-mcp.log"
+			}
+		}
+	}
+}
+```
+
+(On macOS/Linux use `<checkout>/.venv/bin/python` as the command instead.)
+
+### Manual install (without the helper script)
 
 A virtual environment is recommended for dependency isolation, but it is not a KiPilot-specific requirement. If you already manage Python environments another way, point your MCP host at that interpreter instead.
+
+macOS / Linux:
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install .
+```
+
+Windows (PowerShell):
 
 ```powershell
 python -m venv .venv
@@ -213,24 +216,38 @@ python -m pip install .
 
 For development and tests, install in editable mode with development dependencies:
 
-```powershell
+```bash
 python -m pip install -e ".[dev]"
 ```
 
 Start KiCad yourself, open the target hardware project, and open the PCB Editor before using board-aware MCP tools.
 
+### Windows ZIP release (no local Python required)
+
+If you do not want to manage Python at all on Windows, the upstream project publishes a ready-to-run ZIP that bundles its own Python runtime. Download the latest Windows release ZIP from GitHub Releases, extract it, and point your MCP host at `kipilot-mcp.exe`.
+
+- Latest release: https://github.com/belaszalontai/kipilot-mcp/releases/latest
+- Artifact name pattern: `kipilot-mcp-<version>-windows-x64.zip`
+- The ZIP contains the stdio server executable plus its bundled runtime
+
+Do not double-click the executable for normal use. Let your MCP host start it so stdio stays attached to the host.
+
 ## Configuration
 
-The IPC connection uses KiCad's official API endpoint. On Windows this is a named pipe; on macOS and Linux it is a Unix domain socket. When KiCad launches an API plugin it provides these environment variables:
+The IPC connection uses KiCad's official API endpoint. On macOS and Linux it is a Unix domain socket; on Windows it lives under the user temp directory. When KiCad launches an API plugin it provides these environment variables:
 
 ```powershell
 $env:KICAD_API_SOCKET = "..."
 $env:KICAD_API_TOKEN = "..."
 ```
 
-When the server is launched from VS Code rather than from KiCad, those variables may not be present. In that case `kicad-python` falls back to the default platform-dependent IPC endpoint, which is easiest to work with when only one KiCad instance is open.
+When the server is launched from an MCP host rather than from KiCad, those variables may not be present. In that case `kicad-python` falls back to the default platform-dependent IPC endpoint, which is easiest to work with when only one KiCad instance is open:
 
-On macOS the default endpoint is the Unix socket `ipc:///tmp/kicad/api.sock`, which KiCad creates in its temp directory when it launches. With several KiCad instances running, KiCad appends the PID to the socket name, so set `KICAD_API_SOCKET` explicitly to reach a specific instance.
+- macOS and Linux: `ipc:///tmp/kicad/api.sock` (KiCad creates the socket in its temp directory at launch)
+- Linux Flatpak KiCad: `ipc://$HOME/.var/app/org.kicad.KiCad/cache/tmp/kicad/api.sock`
+- Windows: `ipc://%TEMP%\kicad\api.sock`
+
+With several KiCad instances running, KiCad appends the PID to the socket name, so set `KICAD_API_SOCKET` explicitly to reach a specific instance.
 
 KiPilot-specific settings:
 
@@ -252,41 +269,15 @@ Operational notes:
 
 ## Running The Server
 
-After a source installation, run:
+After a source installation, run the server in a terminal for manual checks:
 
-```powershell
-kipilot-mcp
-```
-
-or:
-
-```powershell
+```bash
 python -m kipilot_mcp.server
 ```
 
-Example VS Code MCP configuration for a source install:
+(or the `kipilot-mcp` console script installed into the venv.)
 
-```json
-{
-	"servers": {
-		"kipilot-mcp": {
-			"type": "stdio",
-			"command": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
-			"args": ["-m", "kipilot_mcp.server"],
-			"env": {
-				"KIPILOT_KICAD_CLIENT_NAME": "kipilot-mcp",
-				"KIPILOT_KICAD_TIMEOUT_MS": "60000",
-				"KIPILOT_LOG_LEVEL": "INFO",
-				"KIPILOT_LOG_FILE": ".logs/kipilot-mcp.log"
-			}
-		}
-	}
-}
-```
-
-If your KiCad setup requires an explicit API socket or token, add `KICAD_API_SOCKET` and `KICAD_API_TOKEN` to the same `env` block.
-
-The bundled `start-kipilot-mcp.ps1` script is useful for first-run setup and manual terminal checks on Windows. If you use the downloadable Windows ZIP, point the MCP host at `kipilot-mcp.exe` instead of the Python command. For source installs, MCP host configuration should normally use the direct Python command shown above so the host owns process startup and environment values.
+For normal use, let your MCP host start the server — see [Step 3](#step-3--point-your-mcp-host-at-the-server) for ready-to-paste host configurations. If your KiCad setup requires an explicit API socket or token, add `KICAD_API_SOCKET` and `KICAD_API_TOKEN` to the same `env` block.
 
 ## Development
 
@@ -308,23 +299,23 @@ Run linting:
 python -m ruff check .
 ```
 
-Build the Windows ZIP release locally:
+Optionally, package a self-contained ZIP locally (bundles a Python runtime via PyInstaller; no CI is involved). Build on the OS/architecture you want to ship:
+
+Windows (PowerShell):
 
 ```powershell
 .\build-windows-zip.ps1 -ForceInstall -Clean
 ```
 
-That script creates a versioned archive at `artifacts/kipilot-mcp-<version>-windows-x64.zip`, includes `README.md` and `LICENSE` inside the archive, and is the same build path used by the GitHub Actions release workflow.
+Creates `artifacts/kipilot-mcp-<version>-windows-x64.zip`.
 
-Build the macOS ZIP release locally:
+macOS / Linux (Bash):
 
 ```bash
 ./build-macos-zip.sh --force-install --clean
 ```
 
-That script creates a versioned archive at `artifacts/kipilot-mcp-<version>-macos-<arch>.zip` (where `arch` is `arm64` or `x64`), includes `README.md` and `LICENSE` inside the archive, and is the same build path used by the GitHub Actions macOS release workflow.
-
-Release process checklist: see `RELEASE-CHECKLIST.md`.
+Creates `artifacts/kipilot-mcp-<version>-macos-<arch>.zip` (where `arch` is `arm64` or `x64`, taken from the build machine). Both archives include `README.md` and `LICENSE`. To share a build, upload the ZIP to a GitHub release manually — see `RELEASE-CHECKLIST.md`.
 
 ## Repository Layout
 

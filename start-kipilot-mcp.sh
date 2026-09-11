@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
-# Launch the KiPilot MCP server on macOS.
+# Launch the KiPilot MCP server on macOS or Linux.
 #
-# This is the macOS counterpart of start-kipilot-mcp.ps1. It creates .venv
+# This is the Unix counterpart of start-kipilot-mcp.ps1. It creates .venv
 # when needed, installs the runtime package, applies conservative default
 # environment variables, and starts the stdio MCP server.
 #
@@ -58,8 +58,11 @@ write_status() {
 # binary (rather than platform.machine()) is important: under Rosetta,
 # platform.machine() can report the host architecture even when the running
 # interpreter is x86_64, which silently breaks native wheel/build selection.
+# On non-macOS systems there is no cross-arch interpreter scenario worth
+# checking, so every interpreter classifies as "native".
 python_arch_class() {
     local candidate="$1" host_arch="$2" file_out
+    [[ "$(uname -s)" == "Darwin" ]] || { echo "native"; return 0; }
     file_out="$(file -b "$(command -v "$candidate")" 2>/dev/null)" || return 0
     case "$file_out" in
         *universal*) echo "native" ;;
@@ -78,7 +81,7 @@ find_python() {
     local native_arch candidate arch_class
     native_arch="$(uname -m)"
 
-    # An explicit interpreter choice wins, with a warning on arch mismatch.
+    # An explicit interpreter choice wins (arch warning applies on macOS).
     for candidate in "$python_override" "${KIPILOT_PYTHON:-}"; do
         [[ -z "$candidate" ]] && continue
         if command -v "$candidate" >/dev/null 2>&1 \
@@ -93,7 +96,8 @@ find_python() {
         write_status "Note: requested interpreter '$candidate' was not found or is below Python 3.11."
     done
 
-    # Pass 1: native-arch or universal interpreters, newest first.
+    # Pass 1: native-arch or universal interpreters, newest first
+    # (on Linux this is simply "newest Python 3.11+ on PATH").
     for candidate in python3.13 python3.12 python3.11 python3; do
         command -v "$candidate" >/dev/null 2>&1 || continue
         "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)' 2>/dev/null || continue
@@ -108,7 +112,7 @@ find_python() {
         command -v "$candidate" >/dev/null 2>&1 || continue
         if "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)' 2>/dev/null; then
             write_status "Note: using '$candidate' ($(command -v "$candidate")) which does not match the host arch ($native_arch)."
-            write_status "      If native builds fail, install a native Python, e.g.: brew install python@3.12"
+            write_status "      If native builds fail, install a native Python 3.11+ for your platform."
             echo "$candidate"
             return 0
         fi
@@ -127,7 +131,8 @@ create_venv() {
 
     if ! "$py" -m venv "$venv_path"; then
         write_status "Error: failed to create $venv_path."
-        write_status "Install Python 3.11+ (for example: brew install python@3.12) and rerun."
+        write_status "Install Python 3.11+ and rerun (macOS: brew install python@3.12;"
+        write_status "Debian/Ubuntu: sudo apt install python3.12 python3.12-venv; Fedora: sudo dnf install python3.12)."
         exit 1
     fi
 }
@@ -166,12 +171,18 @@ set_default_env() {
 }
 
 # The KiCad IPC socket is created by KiCad in the temp directory when it
-# launches (default: /tmp/kicad/api.sock on macOS). With multiple KiCad
-# instances running, KiCad appends the PID to the socket name.
+# launches (default: /tmp/kicad/api.sock on macOS and Linux; Flatpak builds
+# use ~/.var/app/org.kicad.KiCad/cache/tmp/kicad/api.sock). With multiple
+# KiCad instances running, KiCad appends the PID to the socket name.
 report_kicad_socket() {
     local socket_root="/tmp/kicad"
+    local flatpak_socket="${HOME}/.var/app/org.kicad.KiCad/cache/tmp/kicad/api.sock"
     if [[ -n "${KICAD_API_SOCKET:-}" ]]; then
         write_status "KiCad IPC endpoint (from KICAD_API_SOCKET): $KICAD_API_SOCKET"
+        return 0
+    fi
+    if [[ -e "$flatpak_socket" ]]; then
+        write_status "KiCad (Flatpak) IPC socket found: $flatpak_socket"
         return 0
     fi
     if ls "$socket_root"/api.sock* >/dev/null 2>&1; then
